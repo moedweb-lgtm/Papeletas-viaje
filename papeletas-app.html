@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Papeletas App</title>
+<script src="https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --card: #22263a;
+    --accent: #f5c842;
+    --accent2: #e07b2a;
+    --text: #eef0f8;
+    --muted: #7a7f9a;
+    --danger: #e05555;
+    --success: #4caf82;
+    --radius: 14px;
+    --font: 'Segoe UI', system-ui, sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid #2d3150;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    color: var(--accent);
+  }
+  .logo span { color: var(--text); font-weight: 400; }
+  .cart-badge-btn {
+    position: relative;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 26px;
+    color: var(--text);
+    padding: 4px 8px;
+  }
+  .badge {
+    position: absolute;
+    top: 0; right: 0;
+    background: var(--accent);
+    color: #000;
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 10px;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+  }
+
+  /* SCREENS */
+  .screen { display: none; flex-direction: column; flex: 1; padding: 20px; }
+  .screen.active { display: flex; }
+
+  /* HOME */
+  .home-hero {
+    text-align: center;
+    margin: 30px 0 36px;
+  }
+  .home-hero .icon-big { font-size: 64px; margin-bottom: 12px; display: block; }
+  .home-hero h1 { font-size: 28px; font-weight: 800; color: var(--accent); }
+  .home-hero p { color: var(--muted); margin-top: 6px; font-size: 15px; }
+
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 20px;
+    border-radius: var(--radius);
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: transform .12s, opacity .12s;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+  .btn:active { transform: scale(.97); opacity: .9; }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-secondary { background: var(--card); color: var(--text); border: 1px solid #2d3150; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+
+  /* SCANNER FILE */
+  .scan-drop {
+    background: var(--card);
+    border: 2px dashed #2d3150;
+    border-radius: var(--radius);
+    padding: 36px 20px;
+    margin-bottom: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    position: relative;
+  }
+  .scan-drop:hover, .scan-drop.drag { border-color: var(--accent); background: #1e2235; }
+  .scan-drop input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .scan-drop .drop-icon { font-size: 48px; display: block; margin-bottom: 10px; }
+  .scan-drop .drop-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .scan-drop .drop-sub { font-size: 13px; color: var(--muted); }
+
+  .scan-preview {
+    display: none;
+    background: var(--card);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 14px;
+    position: relative;
+  }
+  .scan-preview img { width: 100%; max-height: 220px; object-fit: contain; display: block; }
+  .scan-preview .processing {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,.6);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px; color: #fff; font-weight: 700; font-size: 14px;
+  }
+  .spin { animation: spin .8s linear infinite; font-size: 28px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .manual-input {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .manual-input input {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid #2d3150;
+    color: var(--text);
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-family: var(--font);
+  }
+  .manual-input input:focus { outline: none; border-color: var(--accent); }
+  .manual-input input::placeholder { color: var(--muted); }
+  .manual-input button {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: var(--radius);
+    padding: 12px 18px;
+    font-size: 20px;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .scan-result {
+    background: var(--success);
+    color: #fff;
+    padding: 14px;
+    border-radius: var(--radius);
+    text-align: center;
+    font-weight: 700;
+    margin-bottom: 14px;
+    font-size: 15px;
+    display: none;
+  }
+  .scan-result.error { background: var(--danger); }
+
+  /* CART */
+  .cart-list { flex: 1; overflow-y: auto; }
+  .cart-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    gap: 10px;
+    font-size: 15px;
+    padding: 60px 20px;
+  }
+  .cart-empty .icon-big { font-size: 50px; }
+
+  .cart-item {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #2d3150;
+  }
+  .cart-item-info { flex: 1; }
+  .cart-item-title {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text);
+  }
+  .cart-item-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .cart-item-num {
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--accent);
+    min-width: 32px;
+    text-align: center;
+  }
+  .btn-remove {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 8px;
+    transition: background .1s;
+  }
+  .btn-remove:active { background: rgba(224,85,85,.15); }
+
+  .cart-summary {
+    background: var(--surface);
+    border-top: 1px solid #2d3150;
+    padding: 16px 20px 24px;
+  }
+  .cart-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    font-size: 17px;
+  }
+  .cart-total .label { color: var(--muted); }
+  .cart-total .value { font-weight: 800; font-size: 22px; color: var(--accent); }
+
+  /* PAGO */
+  .pay-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 20px;
+    padding: 30px 20px;
+  }
+  .pay-icon { font-size: 80px; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+  .pay-title { font-size: 22px; font-weight: 800; color: var(--text); }
+  .pay-desc { color: var(--muted); font-size: 15px; max-width: 280px; line-height: 1.5; }
+
+  /* barcode card – estilo PrintKard */
+  .barcode-card {
+    background: #e8e8e8;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 320px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    overflow: hidden;
+    border: 1px solid #ccc;
+  }
+  .bc-header {
+    background: linear-gradient(135deg, #c0c0c0 0%, #a0a0a0 40%, #c8c8c8 100%);
+    padding: 10px 16px 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 4px solid #d42b2b;
+  }
+  .bc-logo {
+    font-size: 20px;
+    font-weight: 900;
+    font-style: italic;
+    color: #d42b2b;
+    text-shadow: 1px 1px 0 rgba(0,0,0,.2);
+    letter-spacing: -1px;
+    font-family: Georgia, serif;
+  }
+  .bc-logo span { color: #1a1a1a; }
+  .bc-tagline {
+    background: #d42b2b;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    padding: 4px 16px;
+    text-align: center;
+  }
+  .bc-body {
+    background: #f5f5f5;
+    padding: 14px 18px 12px;
+    text-align: center;
+  }
+  .barcode-bars {
+    display: flex;
+    gap: 1.5px;
+    height: 56px;
+    align-items: stretch;
+    margin-bottom: 6px;
+    justify-content: center;
+  }
+  .barcode-bars div {
+    background: #111;
+    min-width: 1px;
+  }
+  .barcode-num { font-size: 12px; letter-spacing: 2px; color: #222; text-align: center; font-family: 'Courier New', monospace; font-weight: 600; }
+
+  /* TICKET */
+  .ticket-wrap {
+    background: #fff;
+    color: #111;
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 20px;
+    font-family: 'Courier New', monospace;
+    box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  }
+  .ticket-header {
+    text-align: center;
+    border-bottom: 2px dashed #ccc;
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+  }
+  .ticket-header h2 { font-size: 18px; letter-spacing: 3px; }
+  .ticket-header .tn { font-size: 28px; font-weight: 900; color: #000; letter-spacing: 4px; }
+  .ticket-date { font-size: 11px; color: #666; }
+  .ticket-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px dotted #ddd;
+    font-size: 13px;
+  }
+  .ticket-row:last-of-type { border-bottom: none; }
+  .ticket-idx { font-weight: 700; min-width: 24px; color: #888; font-size: 11px; }
+  .ticket-footer {
+    border-top: 2px dashed #ccc;
+    margin-top: 14px;
+    padding-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .ticket-footer .total-label { font-size: 12px; color: #666; }
+  .ticket-footer .total-val { font-size: 20px; font-weight: 900; }
+
+  /* NAV BAR */
+  .nav-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid #2d3150;
+    display: flex;
+    z-index: 99;
+  }
+  .nav-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 12px 6px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    font-family: var(--font);
+    font-weight: 600;
+    letter-spacing: .3px;
+    transition: color .15s;
+  }
+  .nav-btn.active { color: var(--accent); }
+  .nav-btn .icon { font-size: 22px; }
+
+  /* Spacing for fixed nav */
+  .with-nav { padding-bottom: 80px; }
+
+  /* Section title */
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--success);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 14px;
+    opacity: 0;
+    transition: all .3s;
+    z-index: 200;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--danger); }
+
+  /* Modal */
+  .modal-bg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 300;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 24px 20px 40px;
+    width: 100%;
+    max-width: 500px;
+    border-top: 1px solid #2d3150;
+    animation: slideUp .25s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(40px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+  .modal h3 { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+  .modal p { color: var(--muted); font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+
+  /* Scan anim */
+  .scanning-anim {
+    width: 100%;
+    height: 6px;
+    background: var(--card);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .scanning-anim-bar {
+    height: 100%;
+    width: 40%;
+    background: var(--accent);
+    border-radius: 4px;
+    animation: scanBar 1.2s ease-in-out infinite;
+  }
+  @keyframes scanBar {
+    0% { margin-left: 0%; } 100% { margin-left: 60%; }
+  }
+
+  /* ticket number input */
+  #ticketNumInput {
+    background: var(--card);
+    border: 1px solid #2d3150;
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 18px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 3px;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  #ticketNumInput:focus { outline: none; border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">🎟 <span>Papeletas</span></div>
+  <button class="cart-badge-btn" onclick="goTo('cart')">
+    🛒
+    <span class="badge" id="cartBadge">0</span>
+  </button>
+</header>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- SCREENS -->
+
+<!-- HOME -->
+<div class="screen active with-nav" id="screen-home">
+  <div class="home-hero">
+    <span class="icon-big">🎫</span>
+    <h1>Gestor de Papeletas</h1>
+    <p>Escanea, añade al carrito y genera tu ticket</p>
+  </div>
+  <button class="btn btn-primary" onclick="goTo('scan')">
+    📷 Escanear papeleta
+  </button>
+  <button class="btn btn-secondary" onclick="goTo('cart')">
+    🛒 Ver carrito (<span id="homeCartCount">0</span>)
+  </button>
+  <button class="btn btn-ghost" onclick="goTo('ticket')" id="btnHomeTicket" style="display:none">
+    🧾 Ver último ticket
+  </button>
+</div>
+
+<!-- SCAN -->
+<div class="screen with-nav" id="screen-scan">
+  <div class="section-title">📷 Escanear papeleta</div>
+
+  <!-- File drop zone -->
+  <div class="scan-drop" id="scanDrop">
+    <input type="file" accept="image/*" capture="environment" id="fileInput" onchange="handleFile(event)">
+    <span class="drop-icon">📸</span>
+    <div class="drop-title">Toca para hacer foto o elegir imagen</div>
+    <div class="drop-sub">La app detecta el código de barras automáticamente</div>
+  </div>
+
+  <!-- Preview + processing -->
+  <div class="scan-preview" id="scanPreview">
+    <img id="previewImg" src="" alt="preview">
+    <div class="processing" id="processingOverlay">
+      <span class="spin">⚙️</span>
+      <span>Leyendo código...</span>
+    </div>
+  </div>
+
+  <div class="scan-result" id="scanResult"></div>
+
+  <p style="color:var(--muted);font-size:13px;text-align:center;margin-bottom:10px;">o introduce el código manualmente:</p>
+
+  <div class="manual-input">
+    <input type="text" id="manualCode" placeholder="Ej: 32-20018" maxlength="20" 
+           onkeydown="if(event.key==='Enter') addManual()">
+    <button onclick="addManual()">＋</button>
+  </div>
+
+  <button class="btn btn-secondary" onclick="goTo('cart')">🛒 Ver carrito</button>
+</div>
+
+<!-- CART -->
+<div class="screen with-nav" id="screen-cart" style="padding:0;">
+  <div style="flex:1;overflow-y:auto;padding:20px 20px 0;">
+    <div class="section-title">🛒 Carrito</div>
+    <div id="cartList" class="cart-list"></div>
+  </div>
+  <div class="cart-summary">
+    <div class="cart-total">
+      <span class="label">Total papeletas</span>
+      <span class="value" id="cartTotal">0</span>
+    </div>
+    <button class="btn btn-primary" onclick="openPayModal()">💳 Pagar</button>
+    <button class="btn btn-secondary" onclick="goTo('scan')">📷 Añadir más</button>
+  </div>
+</div>
+
+<!-- TICKET -->
+<div class="screen with-nav" id="screen-ticket">
+  <div class="section-title">🧾 Ticket generado</div>
+  <div class="ticket-wrap" id="ticketContent"></div>
+  <button class="btn btn-primary" onclick="exportPDF()">📄 Exportar PDF</button>
+  <button class="btn btn-secondary" onclick="printTicket()">🖨 Imprimir</button>
+  <button class="btn btn-ghost" onclick="newSale()">✨ Nueva venta</button>
+</div>
+
+<!-- NAV BAR -->
+<nav class="nav-bar">
+  <button class="nav-btn active" id="nav-home" onclick="goTo('home')">
+    <span class="icon">🏠</span>Inicio
+  </button>
+  <button class="nav-btn" id="nav-scan" onclick="goTo('scan')">
+    <span class="icon">📷</span>Escanear
+  </button>
+  <button class="nav-btn" id="nav-cart" onclick="goTo('cart')">
+    <span class="icon">🛒</span>Carrito
+  </button>
+  <button class="nav-btn" id="nav-ticket" onclick="goTo('ticket')">
+    <span class="icon">🧾</span>Ticket
+  </button>
+</nav>
+
+<!-- PAGO MODAL -->
+<div class="modal-bg" id="payModal">
+  <div class="modal">
+    <h3>💳 Escanea tu tarjeta</h3>
+    <p>Muestra el código de barras de tu <strong>tarjeta de impresión</strong> al lector para confirmar el pago.</p>
+    <div class="scanning-anim"><div class="scanning-anim-bar"></div></div>
+    <!-- barcode mockup PrintKard -->
+    <div class="barcode-card">
+      <div class="bc-header">
+        <div class="bc-logo">Print<span>Kard</span></div>
+      </div>
+      <div class="bc-tagline">LOW COST PRINTING</div>
+      <div class="bc-body">
+        <div class="barcode-bars" id="bcBars"></div>
+        <div class="barcode-num" id="bcNum">$000005575732</div>
+      </div>
+    </div>
+    <br>
+    <button class="btn btn-success" onclick="confirmPay()">✅ Confirmar pago</button>
+    <button class="btn btn-ghost" onclick="closePayModal()">Cancelar</button>
+  </div>
+</div>
+
+<!-- TICKET NUMBER MODAL -->
+<div class="modal-bg" id="ticketNumModal">
+  <div class="modal">
+    <h3>🧾 Número de ticket</h3>
+    <p>Introduce el número de ticket (se autoincrementa):</p>
+    <input type="number" id="ticketNumInput" value="1" min="1">
+    <button class="btn btn-primary" onclick="generateTicket()">Generar ticket</button>
+  </div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────
+let cart = [];
+let ticketCounter = parseInt(localStorage.getItem('ticketCounter') || '1');
+let lastTicket = null;
+
+// ── NAVIGATION ────────────────────────────────────────────────
+function goTo(page) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + page).classList.add('active');
+  const nb = document.getElementById('nav-' + page);
+  if (nb) nb.classList.add('active');
+
+  if (page === 'cart') renderCart();
+  if (page === 'ticket') renderTicket();
+  updateBadge();
+}
+
+// ── SCANNER (FILE / PHOTO) ────────────────────────────────────
+function handleFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  document.getElementById('scanPreview').style.display = 'block';
+  document.getElementById('processingOverlay').style.display = 'flex';
+
+  const reader = new FileReader();
+  reader.onerror = () => {
+    document.getElementById('processingOverlay').style.display = 'none';
+    showResult('❌ No se pudo leer el archivo.', true);
+  };
+  reader.onload = (e) => {
+    const base64 = e.target.result;
+    const previewImg = document.getElementById('previewImg');
+    previewImg.src = base64;
+
+    const img = new Image();
+    img.onerror = () => {
+      document.getElementById('processingOverlay').style.display = 'none';
+      showResult('❌ No se pudo cargar la imagen.', true);
+    };
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      // Scale down if huge (speeds up decoding)
+      const maxW = 1200;
+      const scale = img.width > maxW ? maxW / img.width : 1;
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const timeout = setTimeout(() => {
+        document.getElementById('processingOverlay').style.display = 'none';
+        showResult('❌ No se detectó código. Introduce el número manualmente.', true);
+        document.getElementById('fileInput').value = '';
+      }, 8000);
+
+      try {
+        const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+        codeReader.decodeFromCanvas(canvas)
+          .then(result => {
+            clearTimeout(timeout);
+            document.getElementById('processingOverlay').style.display = 'none';
+            handleScan(result.getText());
+            document.getElementById('fileInput').value = '';
+          })
+          .catch(() => {
+            clearTimeout(timeout);
+            document.getElementById('processingOverlay').style.display = 'none';
+            showResult('❌ No se detectó código. Introduce el número manualmente.', true);
+            document.getElementById('fileInput').value = '';
+          });
+      } catch(e) {
+        clearTimeout(timeout);
+        document.getElementById('processingOverlay').style.display = 'none';
+        showResult('❌ Error al procesar. Introduce el número manualmente.', true);
+        document.getElementById('fileInput').value = '';
+      }
+    };
+    img.src = base64;
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleScan(code) {
+  const parsed = parseCode(code.trim());
+  if (!parsed) {
+    showResult('❌ Código no reconocido: ' + code, true);
+    return;
+  }
+  addToCart(parsed);
+  showResult('✅ Añadida: Serie ' + parsed.serie + ' – Nº ' + parsed.numero);
+}
+
+function parseCode(raw) {
+  // Accepts: "32-20018", "3220018", "SERIE 32 NUMERO 20018", etc.
+  let m;
+  m = raw.match(/^(\d{1,4})[-\s](\d{4,6})$/);
+  if (m) return { serie: m[1], numero: m[2], raw };
+  m = raw.match(/^(\d{2})(\d{5})$/);
+  if (m) return { serie: m[1], numero: m[2], raw };
+  m = raw.match(/serie\s*(\d+)[^\d]+(\d{4,6})/i);
+  if (m) return { serie: m[1], numero: m[2], raw };
+  // fallback: treat as number only
+  m = raw.match(/^(\d{5,8})$/);
+  if (m) return { serie: '?', numero: m[1], raw };
+  return null;
+}
+
+// ── MANUAL ────────────────────────────────────────────────────
+function addManual() {
+  const input = document.getElementById('manualCode');
+  const val = input.value.trim();
+  if (!val) return;
+  const parsed = parseCode(val);
+  if (!parsed) {
+    showResult('❌ Formato inválido. Usa: 32-20018', true);
+    return;
+  }
+  addToCart(parsed);
+  showResult('✅ Añadida: Serie ' + parsed.serie + ' – Nº ' + parsed.numero);
+  input.value = '';
+}
+
+// ── CART ──────────────────────────────────────────────────────
+function addToCart(item) {
+  // prevent duplicates
+  const exists = cart.find(c => c.serie === item.serie && c.numero === item.numero);
+  if (exists) {
+    showResult('⚠️ Ya está en el carrito', true);
+    return;
+  }
+  cart.push({ ...item, id: Date.now() + Math.random() });
+  updateBadge();
+  showToast('➕ Papeleta añadida');
+}
+
+function removeFromCart(id) {
+  cart = cart.filter(c => c.id !== id);
+  updateBadge();
+  renderCart();
+}
+
+function updateBadge() {
+  const n = cart.length;
+  document.getElementById('cartBadge').textContent = n;
+  document.getElementById('homeCartCount').textContent = n;
+  document.getElementById('cartTotal').textContent = n;
+}
+
+function renderCart() {
+  const list = document.getElementById('cartList');
+  if (cart.length === 0) {
+    list.innerHTML = '<div class="cart-empty"><span class="icon-big">🛒</span><span>El carrito está vacío</span><span style="font-size:13px;">Escanea papeletas para añadirlas</span></div>';
+    return;
+  }
+  list.innerHTML = cart.map((item, i) => `
+    <div class="cart-item">
+      <div class="cart-item-num">${i + 1}</div>
+      <div class="cart-item-info">
+        <div class="cart-item-title">Serie ${item.serie} – Nº ${item.numero}</div>
+        <div class="cart-item-sub">Añadida al carrito</div>
+      </div>
+      <button class="btn-remove" onclick="removeFromCart(${item.id})">🗑</button>
+    </div>
+  `).join('');
+}
+
+// ── PAYMENT ───────────────────────────────────────────────────
+function openPayModal() {
+  if (cart.length === 0) { showToast('El carrito está vacío', true); return; }
+  generateBarcodeAnim();
+  document.getElementById('payModal').classList.add('open');
+}
+
+function closePayModal() {
+  document.getElementById('payModal').classList.remove('open');
+}
+
+function generateBarcodeAnim() {
+  const bars = document.getElementById('bcBars');
+  bars.innerHTML = '';
+  const widths = [];
+  for (let i = 0; i < 40; i++) {
+    const w = Math.random() > .7 ? 3 : 1;
+    widths.push(w);
+    const d = document.createElement('div');
+    d.style.height = (60 + Math.random() * 40) + '%';
+    d.style.flex = w;
+    bars.appendChild(d);
+  }
+  const nums = Array.from({length: 13}, () => Math.floor(Math.random() * 10)).join('');
+  document.getElementById('bcNum').textContent = nums.replace(/(\d)(\d{5})(\d{5})(\d)/, '$1 $2 $3 $4');
+}
+
+function confirmPay() {
+  closePayModal();
+  // open ticket number modal
+  document.getElementById('ticketNumInput').value = ticketCounter;
+  document.getElementById('ticketNumModal').classList.add('open');
+}
+
+function generateTicket() {
+  document.getElementById('ticketNumModal').classList.remove('open');
+  const num = parseInt(document.getElementById('ticketNumInput').value) || ticketCounter;
+  ticketCounter = num + 1;
+  localStorage.setItem('ticketCounter', ticketCounter);
+
+  lastTicket = {
+    numero: String(num).padStart(4, '0'),
+    fecha: new Date().toLocaleString('es-ES'),
+    papeletas: [...cart]
+  };
+  cart = [];
+  updateBadge();
+
+  document.getElementById('btnHomeTicket').style.display = 'flex';
+  goTo('ticket');
+  showToast('✅ Ticket generado');
+}
+
+function renderTicket() {
+  if (!lastTicket) {
+    document.getElementById('ticketContent').innerHTML = '<div style="text-align:center;color:#888;padding:20px;">No hay ticket generado aún.</div>';
+    return;
+  }
+  const t = lastTicket;
+  const rows = t.papeletas.map((p, i) => `
+    <div class="ticket-row">
+      <span class="ticket-idx">${String(i + 1).padStart(2, '0')}</span>
+      <span>Serie ${p.serie} – Nº ${p.numero}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('ticketContent').innerHTML = `
+    <div class="ticket-header">
+      <h2>TICKET</h2>
+      <div class="tn">Nº ${t.numero}</div>
+      <div class="ticket-date">${t.fecha}</div>
+    </div>
+    ${rows}
+    <div class="ticket-footer">
+      <div>
+        <div class="total-label">TOTAL PAPELETAS</div>
+      </div>
+      <div class="total-val">${t.papeletas.length}</div>
+    </div>
+  `;
+}
+
+// ── PDF EXPORT ────────────────────────────────────────────────
+function exportPDF() {
+  if (!lastTicket) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a6' });
+
+  const t = lastTicket;
+  const margin = 12;
+  let y = margin;
+
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(18);
+  doc.text('TICKET', 74, y, { align: 'center' });
+  y += 8;
+
+  doc.setFontSize(28);
+  doc.text('Nº ' + t.numero, 74, y, { align: 'center' });
+  y += 8;
+
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(t.fecha, 74, y, { align: 'center' });
+  y += 4;
+
+  doc.setDrawColor(180);
+  doc.setLineDash([2, 2]);
+  doc.line(margin, y, 148 - margin, y);
+  y += 6;
+  doc.setLineDash([]);
+
+  doc.setTextColor(0);
+  doc.setFontSize(11);
+  t.papeletas.forEach((p, i) => {
+    doc.setFont('courier', 'bold');
+    doc.text(String(i + 1).padStart(2, '0') + '.', margin, y);
+    doc.setFont('courier', 'normal');
+    doc.text('Serie ' + p.serie + '  –  Nº ' + p.numero, margin + 10, y);
+    y += 7;
+  });
+
+  y += 2;
+  doc.setLineDash([2, 2]);
+  doc.line(margin, y, 148 - margin, y);
+  y += 6;
+  doc.setLineDash([]);
+
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(10);
+  doc.text('TOTAL: ' + t.papeletas.length + ' papeleta' + (t.papeletas.length !== 1 ? 's' : ''), margin, y);
+
+  doc.save('ticket-' + t.numero + '.pdf');
+  showToast('📄 PDF exportado');
+}
+
+// ── PRINT ────────────────────────────────────────────────────
+function printTicket() {
+  if (!lastTicket) return;
+  const t = lastTicket;
+  const rows = t.papeletas.map((p, i) =>
+    `<tr><td>${String(i + 1).padStart(2, '0')}</td><td>Serie ${p.serie} &ndash; N&ordm; ${p.numero}</td></tr>`
+  ).join('');
+
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    body { font-family: 'Courier New', monospace; max-width: 300px; margin: 0 auto; padding: 20px; }
+    h2 { text-align: center; font-size: 14px; margin: 0; letter-spacing: 3px; }
+    .num { text-align: center; font-size: 24px; font-weight: 900; margin: 4px 0; }
+    .date { text-align: center; font-size: 10px; color: #666; }
+    hr { border: none; border-top: 1px dashed #aaa; margin: 10px 0; }
+    table { width: 100%; font-size: 12px; border-collapse: collapse; }
+    td { padding: 4px 2px; }
+    td:first-child { color: #888; width: 30px; }
+    .footer { display: flex; justify-content: space-between; margin-top: 10px; font-weight: bold; }
+  </style></head><body>
+  <h2>TICKET</h2>
+  <div class="num">N&ordm; ${t.numero}</div>
+  <div class="date">${t.fecha}</div>
+  <hr>
+  <table>${rows}</table>
+  <hr>
+  <div class="footer"><span>TOTAL</span><span>${t.papeletas.length} papeleta${t.papeletas.length !== 1 ? 's' : ''}</span></div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+// ── NEW SALE ─────────────────────────────────────────────────
+function newSale() {
+  lastTicket = null;
+  cart = [];
+  updateBadge();
+  document.getElementById('btnHomeTicket').style.display = 'none';
+  goTo('home');
+}
+
+// ── FEEDBACK ─────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, err = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.toggle('error', err);
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function showResult(msg, err = false) {
+  const el = document.getElementById('scanResult');
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.classList.toggle('error', err);
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.style.display = 'none'; }, 2500);
+}
+
+// INIT
+updateBadge();
+</script>
+</body>
+</html>
