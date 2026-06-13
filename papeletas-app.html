@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Papeletas App</title>
-<script src="https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -655,7 +654,7 @@ function goTo(page) {
   updateBadge();
 }
 
-// ── SCANNER (FILE / PHOTO) ────────────────────────────────────
+// ── SCANNER CON CLAUDE VISION ────────────────────────────────
 function handleFile(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -668,55 +667,70 @@ function handleFile(event) {
     document.getElementById('processingOverlay').style.display = 'none';
     showResult('❌ No se pudo leer el archivo.', true);
   };
-  reader.onload = (e) => {
-    const base64 = e.target.result;
-    const previewImg = document.getElementById('previewImg');
-    previewImg.src = base64;
+  reader.onload = async (e) => {
+    const base64full = e.target.result; // data:image/jpeg;base64,...
+    const base64data = base64full.split(',')[1];
+    const mediaType = file.type || 'image/jpeg';
 
-    const img = new Image();
-    img.onerror = () => {
+    document.getElementById('previewImg').src = base64full;
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 100,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: mediaType, data: base64data }
+              },
+              {
+                type: 'text',
+                text: 'Esta es una papeleta de rifa. Extrae el NÚMERO DE SERIE y el NÚMERO de la papeleta. Responde SOLO en formato JSON así: {"serie":"32","numero":"26009"}. Si no puedes leerlos claramente responde: {"error":"no_detectado"}'
+              }
+            ]
+          }]
+        })
+      });
+
       document.getElementById('processingOverlay').style.display = 'none';
-      showResult('❌ No se pudo cargar la imagen.', true);
-    };
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      // Scale down if huge (speeds up decoding)
-      const maxW = 1200;
-      const scale = img.width > maxW ? maxW / img.width : 1;
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      const timeout = setTimeout(() => {
-        document.getElementById('processingOverlay').style.display = 'none';
-        showResult('❌ No se detectó código. Introduce el número manualmente.', true);
+      if (!response.ok) {
+        showResult('❌ Error de conexión. Introduce manualmente.', true);
         document.getElementById('fileInput').value = '';
-      }, 8000);
-
-      try {
-        const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
-        codeReader.decodeFromCanvas(canvas)
-          .then(result => {
-            clearTimeout(timeout);
-            document.getElementById('processingOverlay').style.display = 'none';
-            handleScan(result.getText());
-            document.getElementById('fileInput').value = '';
-          })
-          .catch(() => {
-            clearTimeout(timeout);
-            document.getElementById('processingOverlay').style.display = 'none';
-            showResult('❌ No se detectó código. Introduce el número manualmente.', true);
-            document.getElementById('fileInput').value = '';
-          });
-      } catch(e) {
-        clearTimeout(timeout);
-        document.getElementById('processingOverlay').style.display = 'none';
-        showResult('❌ Error al procesar. Introduce el número manualmente.', true);
-        document.getElementById('fileInput').value = '';
+        return;
       }
-    };
-    img.src = base64;
+
+      const data = await response.json();
+      const text = data.content[0].text.trim();
+
+      let parsed;
+      try {
+        const clean = text.replace(/```json|```/g, '').trim();
+        parsed = JSON.parse(clean);
+      } catch {
+        showResult('❌ No se pudo leer. Introduce manualmente.', true);
+        document.getElementById('fileInput').value = '';
+        return;
+      }
+
+      if (parsed.error || !parsed.serie || !parsed.numero) {
+        showResult('❌ No se detectó la papeleta. Introduce manualmente.', true);
+      } else {
+        addToCart({ serie: parsed.serie, numero: parsed.numero });
+        showResult('✅ Serie ' + parsed.serie + ' – Nº ' + parsed.numero);
+      }
+
+    } catch(err) {
+      document.getElementById('processingOverlay').style.display = 'none';
+      showResult('❌ Sin conexión. Introduce manualmente.', true);
+    }
+
+    document.getElementById('fileInput').value = '';
   };
   reader.readAsDataURL(file);
 }
